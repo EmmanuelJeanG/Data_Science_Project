@@ -1,0 +1,152 @@
+---
+title: "Project1_Data110_Spring26"
+format: html
+editor: visual
+author: Emmanuel Gkatongoni
+---
+
+# **Video Game Sales Analysis**
+
+## **Introduction**
+
+The video game industry has grown into one of the largest entertainment markets in the world. In this project, I will be analyzing a dataset of video game sales and ratings from two sources: VGChartz.com, which tracks global retail sales figures, and Metacritic.com, which aggregates professional critic and user review scores into a single numerical rating.
+
+The dataset includes **16,719 games** and 16 variables. The categorical variables include game name, platform (PS4, Xbox, Wii), genre (Action, Sports, RPG), publisher, developer, and ESRB rating. The quantitative variables include regional sales (North America, Europe, Japan, and Other), global sales (in millions), critic score (out of 100), user score (out of 10), and their respective counts.
+
+The main goal of this analysis is to see whether critic scores can predict global sales — in other words, do higher-rated games actually sell more? To test this, I will use a linear regression model.
+
+## **Setting up the Data**
+
+**To get started, I load the `tidyverse` package so that I can read, clean, and build visualizations with the data.**
+
+```{r}
+#| label: Setup
+# Loading the necessary libraries for this project.
+# tidyverse includes readr for loading data, dplyr for cleaning,
+# and ggplot2 for visualization.
+
+library(tidyverse)
+```
+
+**Next we load and clean the data**
+
+```{r}
+#| label: Loading the Data
+# Loading the dataset using readr::read_csv().
+# The dataset comes from VGChartz.com and Metacritic.com
+# and contains 16,719 video game titles with sales and rating information.
+
+vg <- readr::read_csv("Video_Games_Sales_as_at_22_Dec_2016.csv")
+
+## Data Cleaning
+# The dataset has missing values in key columns like Critic_Score, User_Score, and Global_Sales which would interfere with our linear regression. We remove any rows missing those values.
+# We also convert User_Score to numeric since it is stored as text in the raw file, and filter out any placeholder values like "tbd".
+
+vg_clean <- vg |> filter(User_Score != "tbd") |> mutate(User_Score = as.numeric(User_Score)) |> drop_na(Critic_Score, User_Score, Global_Sales)
+
+# Preview the cleaned dataset to confirm it looks correct
+glimpse(vg_clean)
+```
+
+## **Linear Regression Analysis**
+
+Now for the main analysis. I'll build a linear regression model to test whether critic scores can predict how well a game sells globally. Then plot the diagnostics to verify our assumptions are met.
+
+```{r}
+#| label: regression-analysis
+# Building a linear regression model to examine whether Critic_Score
+# can predict Global_Sales. lm() fits the model and summary() gives
+# us the p-values and adjusted R-squared we need to evaluate it.
+# coef() extracts the slope and intercept to write our equation.
+# Diagnostic plots check our regression assumptions:
+# - Residuals vs Fitted: checks linearity
+# - Q-Q plot: checks normality of residuals
+# - Scale-Location: checks equal variance (homoscedasticity)
+# - Residuals vs Leverage: identifies influential outliers
+
+model <- lm(Global_Sales ~ Critic_Score, data = vg_clean)
+summary(model)
+coef(model)
+
+par(mfrow = c(2, 2))
+plot(model)
+```
+
+## Model Equation & Analysis
+
+Based on the model output, the regression equation is:
+
+**Global_Sales = -1.56 + 0.033(Critic_Score)**
+
+This means that for every 1-point increase in Critic Score, global sales increase by about **0.033 million units**.
+
+**P-value:** Both the intercept and Critic_Score have p-values less than 0.05, so Critic Score is a statistically significant predictor of global sales.
+
+**Adjusted R²:** The adjusted R² is **0.056**, meaning Critic Score only explains about **5.6% of the variation** in sales. So even though it’s significant, it’s not a strong predictor by itself and other factors likely matter more.
+
+**Diagnostic Plots**
+
+**Residuals vs Fitted:** The points show a fan shape, which suggests the model doesn’t fully meet the linearity assumption.
+
+**Q-Q Plot:** The points don’t follow the line well, meaning the residuals aren’t normally distributed, likely because of a few very high-selling games.
+
+**Scale-Location:** There’s an upward trend, showing heteroscedasticity (the spread increases as values increase).
+
+**Residuals vs Leverage:** There are a few high-leverage points, but most are within acceptable limits.
+
+Overall, Critic Score does have a significant effect on global sales, but the low R² and issues with the assumptions show that this model isn’t very strong on its own. Adding more variables would likely improve it.
+
+## Exploring Data and Visualizations
+
+Now for the main analysis. I built a linear regression model to see if critic scores can predict global game sales. I also included diagnostic plots to check whether the model assumptions are met.
+
+```{r}
+#| label: visualization
+# A scatterplot is the best choice here since we are exploring the 
+# relationship between two quantitative variables (Critic_Score and 
+# Global_Sales). Coloring by Genre adds a categorical layer and lets 
+# us see if certain genres tend to score higher or sell more.
+# We cap Global_Sales at 10 million to reduce the effect of mega-selling 
+# outliers like Wii Sports that squish the rest of the data.
+# geom_smooth adds our regression line for visual reference.
+# theme_minimal() replaces the default ggplot grey background.
+
+vg_clean |> filter(Global_Sales <= 10) |> ggplot(aes(x = Critic_Score, y = Global_Sales, color = Genre)) + geom_point(alpha = 0.4, size = 1.5) + geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.8) + scale_color_manual(values = c( "Action" = "#E63946","Sports"= "#F4A261","Shooter" = "#2A9D8F","Role-Playing"= "#457B9D","Platform" = "#8338EC","Racing" = "#FB5607","Misc" = "#A8DADC","Fighting" = "#264653","Simulation" = "#E9C46A","Strategy" = "#06D6A0","Adventure" = "#118AB2","Puzzle" = "#FFB703")) + labs(title = "Do Better Reviews Mean More Sales?", subtitle = "Global video game sales vs. critic scores by genre", x = "Critic Score (out of 100)", y = "Global Sales (millions of units)", color = "Genre", caption = "Source: VGChartz.com & Metacritic.com") + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14), plot.subtitle = element_text(size = 10, color = "grey40"), plot.caption = element_text(size = 8, color = "grey60"))
+
+```
+
+Since critic score didn’t fully explain game sales, I looked at genre next. This bar chart shows the average global sales for each genre, which helps give a better idea of what types of games tend to perform best overall.
+
+```{r}
+#| label: visualization-2
+# Since our regression showed critic score only explains 5.6% of sales,
+# we explore Genre as another potential factor. This bar chart calculates
+# the average global sales per genre and sorts them from highest to lowest
+# to make comparisons easy. Each bar gets its own color to distinguish
+# genres clearly. coord_flip() rotates the chart so genre names are
+# readable. theme_minimal() keeps the clean look consistent with our
+# first plot.
+
+vg_clean |> group_by(Genre) |> summarise(Avg_Sales = mean(Global_Sales, na.rm = TRUE)) |> arrange(desc(Avg_Sales)) |> ggplot(aes(x = reorder(Genre, Avg_Sales), y = Avg_Sales, fill = Genre)) + geom_col(show.legend = FALSE) + coord_flip() + scale_fill_manual(values = c("Action" = "#E63946","Sports" = "#F4A261","Shooter" = "#2A9D8F","Role-Playing"= "#457B9D","Platform" = "#8338EC","Racing" = "#FB5607","Misc" = "#A8DADC","Fighting" = "#264653","Simulation" = "#E9C46A","Strategy" = "#06D6A0","Adventure" = "#118AB2","Puzzle" = "#FFB703")) + labs(title = "Which Game Genres Sell the Most?",subtitle = "Average global sales per genre across all platforms",x = "Genre",y = "Average Global Sales (millions of units)",caption = "Source: VGChartz.com & Metacritic.com") + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14),plot.subtitle = element_text(size = 10, color = "grey40"),plot.caption = element_text(size = 8, color = "grey60"))
+
+```
+
+#### Analysis & Reflection
+
+**Data Cleaning**
+
+The original dataset had 16,719 rows, but it needed some cleaning before I could actually analyze it. The main issue was the User_Score column, which was stored as text instead of numbers. This was because some values were listed as “tbd” (to be determined), meaning those games didn’t have enough user reviews yet.
+
+To fix this, I first removed all rows where User_Score was “tbd”. Then I converted the remaining values into numeric form so they could be used in calculations. After that, I removed any rows that still had missing values in Critic_Score, User_Score, or Global_Sales, since those are the main variables I’m using for my analysis. After these steps, I was left with a clean dataset that I could use for graphs and further analysis.
+
+**What the Visualizations Show**
+
+The first visualization was a scatterplot of Critic Score vs. Global Sales, colored by genre. It showed a slight positive trend, meaning higher-rated games tend to sell a bit more, but the relationship is weak. The points are very spread out, which matches the low R² value of 0.056. This means critic scores only explain a small part of game sales. I also noticed that many low-scoring games still sell very well, suggesting factors like marketing or popular franchises play a bigger role.
+
+The second visualization was a bar chart of average global sales by genre. The biggest surprise was that the “Misc” category had the highest average sales. Platform and Shooter games were also near the top, which makes sense because of well-known franchises. Strategy and Adventure games were lower, suggesting they appeal to smaller audiences overall.
+
+**Additional Ideas & My Limitations**
+
+One thing I would have liked to include is a multiple linear regression using Critic Score, Genre, and Platform together to better understand what affects global sales. This would give a more complete picture instead of looking at one factor at a time.
+
+I also wanted to look at how game sales changed over time using a time series plot. However, the dataset only includes physical retail sales up to 2016, so it doesn’t capture more recent trends like digital sales or mobile gaming. Because of this, the data doesn’t fully represent how games are sold today.
